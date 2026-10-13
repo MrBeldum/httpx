@@ -415,11 +415,15 @@ class BaseClient:
         Merge a cookies argument together with any cookies on the client,
         to create the cookies used for the outgoing request.
         """
-        if cookies or self.cookies:
-            merged_cookies = Cookies(self.cookies)
-            merged_cookies.update(cookies)
-            return merged_cookies
-        return cookies
+        if cookies is None:
+            # Fast path: no per-request cookies to merge, so the client's
+            # cookies can be used as-is, without copying the whole jar.
+            # `Request` only reads the cookies to set the `Cookie` header,
+            # so sharing the client's jar here is safe.
+            return self.cookies
+        merged_cookies = Cookies(self.cookies)
+        merged_cookies.update(cookies)
+        return merged_cookies
 
     def _merge_headers(self, headers: HeaderTypes | None = None) -> HeaderTypes | None:
         """

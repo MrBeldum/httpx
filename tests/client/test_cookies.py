@@ -166,3 +166,44 @@ def test_cookie_persistence() -> None:
     response = client.get("http://example.org/echo_cookies")
     assert response.status_code == 200
     assert response.json() == {"cookies": "example-name=example-value"}
+
+
+def test_merge_cookies_without_per_request_cookies_returns_client_cookies() -> None:
+    """
+    Merging with no per-request cookies returns the client's cookies
+    as-is, instead of copying the whole jar. (See #2875.)
+    """
+    client = httpx.Client(
+        cookies={"example-name": "example-value"},
+        transport=httpx.MockTransport(get_and_set_cookies),
+    )
+    assert client._merge_cookies(None) is client.cookies
+
+
+def test_merge_cookies_with_no_cookies() -> None:
+    """
+    Merging with no per-request cookies and no client cookies
+    returns an empty cookies instance.
+    """
+    client = httpx.Client(transport=httpx.MockTransport(get_and_set_cookies))
+    merged = client._merge_cookies(None)
+    assert merged is client.cookies
+    assert not merged
+
+
+def test_merge_cookies_with_per_request_cookies() -> None:
+    """
+    Merging per-request cookies combines them with the client's cookies,
+    without mutating the client's cookies.
+    """
+    client = httpx.Client(
+        cookies={"client-name": "client-value"},
+        transport=httpx.MockTransport(get_and_set_cookies),
+    )
+    merged = client._merge_cookies({"request-name": "request-value"})
+    assert isinstance(merged, httpx.Cookies)
+
+    assert merged is not client.cookies
+    assert merged["client-name"] == "client-value"
+    assert merged["request-name"] == "request-value"
+    assert "request-name" not in client.cookies
